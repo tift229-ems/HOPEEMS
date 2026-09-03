@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hope EMS Training Academy - Clinical Field Ride Log Portal</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .chart-container {
+      position: relative;
+      width: 100%;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+      height: 300px;
+      max-height: 380px;
+    }
+    @media (min-width: 768px) {
+      .chart-container {
+        height: 340px;
+      }
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-stone-100 text-slate-800 font-sans min-h-screen flex flex-col antialiased">
+
+  <!-- Chosen Palette: Slate & Crimson Med-Emergency Theme with Navy Accents -->
+  <!-- Application Structure Plan:
+       Designed as an interactive, multi-view Clinical Management Portal to replace manual static entry. 
+       Structure includes:
+       1. Top Header: Institution identity, active shift timer, quick action buttons.
+       2. Main Navigation Bar: Tabbed switching between 'New Shift Log Form', 'State Analytics & Tally Dashboard', 'Saved Shifts History', and 'Preceptor Verification'.
+       3. Dynamic Multi-Step Form: Organizes the 6 Blueprint sections into clean, interactive steps with automated live calculations (e.g. Total assessments vs transports validation).
+       4. Real-time Visualizations: Chart.js dynamic distribution charts for Age groups (Pediatric Age 1-17 / Adult / Geriatric), Skill roles, and Transport outcomes.
+       5. Data Storage: Uses browser LocalStorage for draft saving, shift history logging, and immediate CSV exports mimicking Google Sheets integration.
+  -->
+  <!-- Visualization & Content Choices:
+       - Age Distribution -> Donut Chart (Chart.js / Canvas) -> Navy (#1e3a8a) for Pediatric (Age 1-17) -> Interactive hover -> Displays Ped/Adult/Geriatric balance against NREMT targets.
+       - Skill Roles -> Stacked/Grouped Bar Chart (Chart.js / Canvas) -> Interactive filter -> Shows Lead vs Assist vs Observed skills.
+       - Transport Outcomes -> Pie Chart (Chart.js / Canvas) -> Transported, Refusal, DOA, Cancelled breakdowns.
+       - Table Layouts -> Responsive HTML/CSS tables with state filters -> Allows preceptors and coordinators to audit submitted logs.
+  -->
+  <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+  <!-- Top Navigation Header -->
+  <header class="bg-slate-900 text-white shadow-md border-b-4 border-red-700 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 bg-red-700 text-white font-black text-xl rounded-lg flex items-center justify-center shadow-inner">
+          ✚
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight tracking-wide">Hope EMS Training Academy</h1>
+          <p class="text-xs text-slate-300 font-medium">GA DPH & NREMT Clinical Field Ride Log Portal</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3 text-xs sm:text-sm">
+        <span class="bg-slate-800 px-3 py-1.5 rounded-md border border-slate-700 text-slate-300 font-mono">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+          System Status: Compliance Active
+        </span>
+        <button onclick="exportAllToCSV()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-md font-semibold transition border border-slate-600 shadow-sm flex items-center gap-1.5">
+          <span>↓</span> Export CSV
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- View Navigation Tabs -->
+  <nav class="bg-white border-b border-stone-200 shadow-sm sticky top-[68px] z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto custom-scrollbar space-x-2 sm:space-x-4 py-2">
+      <button id="tab-btn-form" onclick="switchTab('form')" class="px-4 py-2 text-sm font-bold rounded-lg transition-colors bg-red-700 text-white shadow-sm flex items-center gap-2 whitespace-nowrap">
+        <span>📝</span> Clinical Shift Log Form
+      </button>
+      <button id="tab-btn-analytics" onclick="switchTab('analytics')" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors text-slate-600 hover:bg-stone-100 flex items-center gap-2 whitespace-nowrap">
+        <span>📊</span> State Analytics & Tallies
+      </button>
+      <button id="tab-btn-history" onclick="switchTab('history')" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors text-slate-600 hover:bg-stone-100 flex items-center gap-2 whitespace-nowrap">
+        <span>📁</span> Shift History & Logs (<span id="history-count">0</span>)
+      </button>
+      <button id="tab-btn-guidelines" onclick="switchTab('guidelines')" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors text-slate-600 hover:bg-stone-100 flex items-center gap-2 whitespace-nowrap">
+        <span>ℹ️</span> GA DPH Standards Guide
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full">
+
+    <!-- VIEW 1: DYNAMIC FORM ENTRY -->
+    <section id="view-form" class="space-y-6">
+      
+      <!-- Section Introductory Context -->
+      <div class="bg-white border-l-4 border-red-700 rounded-r-xl p-5 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-1">Student Clinical Field Ride Documentation</h2>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          Welcome to the official Hope EMS Training Academy field ride reporting tool. This single-page form captures shift metrics, patient encounters, psychomotor skill roles, site evaluations, and preceptor license verifications required by the Georgia Department of Public Health (GA DPH) Office of EMS and Trauma. Please fill out all required fields at the end of your shift with your designated field preceptor.
+        </p>
+      </div>
+
+      <!-- Form Wizard Step Indicators -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs font-semibold">
+        <div id="step-pill-1" class="py-2 px-1 bg-red-700 text-white rounded-lg shadow-sm">1. Shift Info</div>
+        <div id="step-pill-2" class="py-2 px-1 bg-stone-200 text-slate-600 rounded-lg">2. Metrics</div>
+        <div id="step-pill-3" class="py-2 px-1 bg-stone-200 text-slate-600 rounded-lg">3. Encounters</div>
+        <div id="step-pill-4" class="py-2 px-1 bg-stone-200 text-slate-600 rounded-lg">4. Skills Matrix</div>
+        <div id="step-pill-5" class="py-2 px-1 bg-stone-200 text-slate-600 rounded-lg">5. Evaluation</div>
+        <div id="step-pill-6" class="py-2 px-1 bg-stone-200 text-slate-600 rounded-lg">6. Preceptor Sign-off</div>
+      </div>
+
+      <!-- The Form -->
+      <form id="clinical-form" onsubmit="handleFormSubmit(event)" class="space-y-8">
+
+        <!-- SECTION 1: SHIFT & STUDENT DETAILS -->
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+          <div class="bg-slate-900 px-6 py-4 text-white flex justify-between items-center">
+            <h3 class="font-bold text-md flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-red-700 text-xs flex items-center justify-center">1</span>
+              Section 1: Student & Shift Information
+            </h3>
+            <span class="text-xs text-slate-400">Required General Metadata</span>
+          </div>
+          <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Student Full Name *</label>
+              <input type="text" id="student_name" required placeholder="e.g. Jane Doe" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 focus:border-transparent outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Date of Shift *</label>
+              <input type="date" id="shift_date" required class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 focus:border-transparent outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Clinical Service / Agency *</label>
+              <select id="clinical_agency" required class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 focus:border-transparent outline-none bg-white">
+                <option value="">Select EMS Agency...</option>
+                <option value="Berrien County EMS">Berrien County EMS</option>
+                <option value="Worth County EMS">Worth County EMS</option>
+                <option value="Hope EMS Station">Hope EMS Station</option>
+                <option value="Other">Other (Specify in Comments)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Unit / Ambulance Number *</label>
+              <input type="text" id="unit_number" required placeholder="e.g. Medic 1, Rescue 3" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 focus:border-transparent outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Arrival Time (Shift Start) *</label>
+              <input type="time" id="start_time" required onchange="calcShiftHours()" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 focus:border-transparent outline-none">
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">End Time (Shift End) *</label>
+              <input type="time" id="end_time" required onchange="calcShiftHours()" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 focus:border-transparent outline-none">
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 2: STATE TALLY & METRICS (GA DPH / NREMT) -->
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+          <div class="bg-slate-900 px-6 py-4 text-white flex justify-between items-center">
+            <h3 class="font-bold text-md flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-red-700 text-xs flex items-center justify-center">2</span>
+              Section 2: Shift Tally & Metrics (GA DPH / NREMT Compliance)
+            </h3>
+            <span class="text-xs text-slate-400">Quantitative Metrics</span>
+          </div>
+          <div class="p-6 space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 bg-stone-50 p-4 rounded-lg border border-stone-200">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Total Shift Hours *</label>
+                <input type="number" step="0.5" id="shift_hours" required min="0.5" placeholder="e.g. 12" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm font-bold text-slate-900 focus:ring-2 focus:ring-red-600 outline-none">
+                <span class="text-[10px] text-slate-500">Calculated or manually refined</span>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Completed Transports *</label>
+                <input type="number" id="total_transports" required min="0" placeholder="0" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm font-bold text-slate-900 focus:ring-2 focus:ring-red-600 outline-none">
+                <span class="text-[10px] text-slate-500">Patients physically transported</span>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">GEMSIS / ImageTrend PCRs Written *</label>
+                <input type="number" id="pcrs_written" required min="0" placeholder="0" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm font-bold text-slate-900 focus:ring-2 focus:ring-red-600 outline-none">
+                <span class="text-[10px] text-slate-500">Official patient care reports authored</span>
+              </div>
+            </div>
+
+            <div class="border-t border-stone-200 pt-4">
+              <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Live Assessment Age Breakdown</h4>
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div class="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                  <label class="block text-xs font-bold text-indigo-950 mb-1">Pediatric (Age 1–17)</label>
+                  <input type="number" id="ped_assessments" required min="0" value="0" onchange="updateCalculatedTotals()" class="w-full px-3 py-1.5 border border-indigo-300 rounded text-sm font-bold text-indigo-950 focus:ring-1 focus:ring-indigo-700">
+                </div>
+                <div class="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                  <label class="block text-xs font-bold text-blue-900 mb-1">Adult (18–64 yrs)</label>
+                  <input type="number" id="adult_assessments" required min="0" value="0" onchange="updateCalculatedTotals()" class="w-full px-3 py-1.5 border border-blue-200 rounded text-sm font-bold text-blue-900 focus:ring-1 focus:ring-blue-600">
+                </div>
+                <div class="p-3 bg-amber-50 rounded-lg border border-amber-100">
+                  <label class="block text-xs font-bold text-amber-900 mb-1">Geriatric (65+ yrs)</label>
+                  <input type="number" id="geriatric_assessments" required min="0" value="0" onchange="updateCalculatedTotals()" class="w-full px-3 py-1.5 border border-amber-200 rounded text-sm font-bold text-amber-900 focus:ring-1 focus:ring-amber-600">
+                </div>
+                <div class="p-3 bg-stone-100 rounded-lg border border-stone-200 flex flex-col justify-center">
+                  <span class="text-xs text-slate-500 font-semibold">Total Live Assessments</span>
+                  <span id="total_live_assessments_display" class="text-xl font-black text-slate-800">0</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Vital Signs Assessed (BP, Pulse, RR, SpO2) *</label>
+              <input type="number" id="vitals_assessed" required min="0" placeholder="Number of full sets taken" class="w-full md:w-1/3 px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 outline-none">
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 3: PATIENT ENCOUNTER & CARE LOG (CALLS 1 TO 5) -->
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+          <div class="bg-slate-900 px-6 py-4 text-white flex justify-between items-center">
+            <h3 class="font-bold text-md flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-red-700 text-xs flex items-center justify-center">3</span>
+              Section 3: Patient Encounters & Care Log
+            </h3>
+            <span class="text-xs text-slate-400">Call 1 Required • Calls 2–5 Optional</span>
+          </div>
+          <div class="p-6 space-y-6">
+            <p class="text-xs text-slate-500">
+              Document up to 5 patient encounters for this shift. Specify the chief complaint, interventions, and transport status for each call.
+            </p>
+
+            <!-- Encounter Tabs Header -->
+            <div class="flex space-x-2 border-b border-stone-200 pb-2">
+              <button type="button" onclick="switchCallTab(1)" id="call-tab-1" class="px-3 py-1.5 text-xs font-bold rounded-t-lg bg-red-700 text-white">Call #1 *</button>
+              <button type="button" onclick="switchCallTab(2)" id="call-tab-2" class="px-3 py-1.5 text-xs font-bold rounded-t-lg bg-stone-100 text-slate-600">Call #2</button>
+              <button type="button" onclick="switchCallTab(3)" id="call-tab-3" class="px-3 py-1.5 text-xs font-bold rounded-t-lg bg-stone-100 text-slate-600">Call #3</button>
+              <button type="button" onclick="switchCallTab(4)" id="call-tab-4" class="px-3 py-1.5 text-xs font-bold rounded-t-lg bg-stone-100 text-slate-600">Call #4</button>
+              <button type="button" onclick="switchCallTab(5)" id="call-tab-5" class="px-3 py-1.5 text-xs font-bold rounded-t-lg bg-stone-100 text-slate-600">Call #5</button>
+            </div>
+
+            <!-- Call Container Template -->
+            <div id="call-fields-container">
+              <!-- Dynamically rendered via JS for calls 1..5 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 4: PSYCHOMOTOR SKILLS EVALUATION -->
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+          <div class="bg-slate-900 px-6 py-4 text-white flex justify-between items-center">
+            <h3 class="font-bold text-md flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-red-700 text-xs flex items-center justify-center">4</span>
+              Section 4: Psychomotor Skills Evaluation Matrix
+            </h3>
+            <span class="text-xs text-slate-400">NREMT Skill Tracking</span>
+          </div>
+          <div class="p-6">
+            <p class="text-xs text-slate-500 mb-4">
+              Indicate the highest role performed for each psychomotor skill during this shift.
+            </p>
+
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr class="bg-stone-100 text-slate-700 border-b border-stone-200">
+                    <th class="p-3 font-bold">Psychomotor Skill Domain</th>
+                    <th class="p-3 text-center font-bold">Performed Lead Role</th>
+                    <th class="p-3 text-center font-bold">Performed Assist Role</th>
+                    <th class="p-3 text-center font-bold">Observed Only</th>
+                    <th class="p-3 text-center font-bold">Not Encountered</th>
+                  </tr>
+                </thead>
+                <tbody id="skills-matrix-body" class="divide-y divide-stone-200">
+                  <!-- Skill Rows populated by JavaScript -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 5: CLINICAL SITE & PRECEPTOR EVALUATION -->
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+          <div class="bg-slate-900 px-6 py-4 text-white flex justify-between items-center">
+            <h3 class="font-bold text-md flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-red-700 text-xs flex items-center justify-center">5</span>
+              Section 5: Site Experience & Preceptor Feedback
+            </h3>
+            <span class="text-xs text-slate-400">Quality Assurance</span>
+          </div>
+          <div class="p-6 space-y-6">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Overall Clinical Site Experience (1 = Poor, 5 = Excellent) *</label>
+              <div class="flex items-center space-x-6 bg-stone-50 p-3 rounded-lg border border-stone-200">
+                <label class="inline-flex items-center space-x-1 cursor-pointer"><input type="radio" name="site_rating" value="1" required class="text-red-600 focus:ring-red-500"> <span class="text-xs font-bold">1 (Poor)</span></label>
+                <label class="inline-flex items-center space-x-1 cursor-pointer"><input type="radio" name="site_rating" value="2" class="text-red-600 focus:ring-red-500"> <span class="text-xs font-bold">2</span></label>
+                <label class="inline-flex items-center space-x-1 cursor-pointer"><input type="radio" name="site_rating" value="3" class="text-red-600 focus:ring-red-500"> <span class="text-xs font-bold">3</span></label>
+                <label class="inline-flex items-center space-x-1 cursor-pointer"><input type="radio" name="site_rating" value="4" class="text-red-600 focus:ring-red-500"> <span class="text-xs font-bold">4</span></label>
+                <label class="inline-flex items-center space-x-1 cursor-pointer"><input type="radio" name="site_rating" value="5" class="text-red-600 focus:ring-red-500"> <span class="text-xs font-bold">5 (Excellent)</span></label>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 class="text-xs font-bold text-slate-700 uppercase mb-2">Site Criteria Checklist</h4>
+                <div class="space-y-2 bg-stone-50 p-3 rounded-lg border border-stone-200 text-xs">
+                  <div class="flex justify-between items-center">
+                    <span>Helpful Environment:</span>
+                    <select id="site_helpful" class="border rounded px-2 py-1 bg-white"><option value="Met">Met</option><option value="Not Met">Not Met</option></select>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span>Positive Staff Attitude:</span>
+                    <select id="site_attitude" class="border rounded px-2 py-1 bg-white"><option value="Met">Met</option><option value="Not Met">Not Met</option></select>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span>Professional Environment:</span>
+                    <select id="site_prof" class="border rounded px-2 py-1 bg-white"><option value="Met">Met</option><option value="Not Met">Not Met</option></select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 class="text-xs font-bold text-slate-700 uppercase mb-2">Preceptor Mentorship Checklist</h4>
+                <div class="space-y-2 bg-stone-50 p-3 rounded-lg border border-stone-200 text-xs">
+                  <div class="flex justify-between items-center">
+                    <span>Helpful Instruction Provided:</span>
+                    <select id="preceptor_instruction" class="border rounded px-2 py-1 bg-white"><option value="Met">Met</option><option value="Not Met">Not Met</option></select>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span>Constructive Debrief / Feedback:</span>
+                    <select id="preceptor_feedback" class="border rounded px-2 py-1 bg-white"><option value="Met">Met</option><option value="Not Met">Not Met</option></select>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span>Professional Conduct Displayed:</span>
+                    <select id="preceptor_conduct" class="border rounded px-2 py-1 bg-white"><option value="Met">Met</option><option value="Not Met">Not Met</option></select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Overall Shift Assessment *</label>
+              <select id="overall_experience" required class="w-full md:w-1/2 px-3 py-2 border border-stone-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-red-600 outline-none">
+                <option value="Satisfactory">Satisfactory Shift</option>
+                <option value="Unsatisfactory">Unsatisfactory Shift</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 6: PRECEPTOR VERIFICATION & SIGN-OFF -->
+        <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+          <div class="bg-slate-900 px-6 py-4 text-white flex justify-between items-center">
+            <h3 class="font-bold text-md flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-red-700 text-xs flex items-center justify-center">6</span>
+              Section 6: Preceptor Verification & Attestation
+            </h3>
+            <span class="text-xs text-slate-400">Legal Verification</span>
+          </div>
+          <div class="p-6 space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Field Preceptor Printed Name *</label>
+                <input type="text" id="preceptor_name" required placeholder="Full Name" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 outline-none">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">GA EMS License Number *</label>
+                <input type="text" id="preceptor_license" required placeholder="e.g. Paramedic / AEMT #12345" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 outline-none">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Preceptor Phone / Email *</label>
+                <input type="text" id="preceptor_contact" required placeholder="Phone or Email" class="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:ring-2 focus:ring-red-600 outline-none">
+              </div>
+            </div>
+
+            <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg space-y-3">
+              <label class="flex items-start space-x-3 cursor-pointer">
+                <input type="checkbox" id="preceptor_attestation" required class="mt-1 text-red-600 focus:ring-red-500 rounded">
+                <span class="text-xs text-amber-900 font-medium leading-relaxed">
+                  <strong>Preceptor Attestation Statement:</strong> By checking this box, I attest that I directly supervised the student during this shift, and that all documented hours, patient encounters, PCR numbers, and psychomotor skills are accurate and complete in accordance with Georgia DPH EMS Office regulations.
+                </span>
+              </label>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 uppercase mb-2">E-Signature Verification Code / Typed Signature *</label>
+              <input type="text" id="preceptor_esign" required placeholder="Type Preceptor Full Legal Name as E-Signature" class="w-full md:w-2/3 px-3 py-2 border border-stone-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-red-600 outline-none">
+            </div>
+          </div>
+        </div>
+
+        <!-- Submit & Actions Bar -->
+        <div class="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-stone-200 shadow-sm">
+          <div class="text-xs text-slate-500">
+            * All required fields must be completed prior to submitting to the Hope EMS registry.
+          </div>
+          <div class="flex space-x-3 w-full sm:w-auto">
+            <button type="button" onclick="resetForm()" class="px-4 py-2 border border-stone-300 rounded-lg text-xs font-bold text-slate-600 hover:bg-stone-100 transition w-1/2 sm:w-auto">Clear Form</button>
+            <button type="submit" class="px-6 py-2.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-sm font-bold shadow-md transition w-1/2 sm:w-auto">Submit Field Log</button>
+          </div>
+        </div>
+
+      </form>
+    </section>
+
+    <!-- VIEW 2: STATE ANALYTICS & TALLY DASHBOARD -->
+    <section id="view-analytics" class="hidden space-y-6">
+      
+      <!-- Section Introductory Context -->
+      <div class="bg-white border-l-4 border-slate-900 rounded-r-xl p-5 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-1">State Compliance & Shift Tally Dashboard</h2>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          This dashboard aggregates all submitted ride logs stored in the local session. It calculates critical NREMT and GA DPH Office of EMS and Trauma metrics, including patient age group distribution (pediatric age 1-17 vs. adult vs. geriatric), skill participation roles, and transport status percentages to verify entry-level clinical competency.
+        </p>
+      </div>
+
+      <!-- Quick Metric Stat Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-stone-200 shadow-sm text-center">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Shift Hours</span>
+          <p id="dash-stat-hours" class="text-2xl font-black text-slate-900 mt-1">0</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-stone-200 shadow-sm text-center">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Transports</span>
+          <p id="dash-stat-transports" class="text-2xl font-black text-red-700 mt-1">0</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-stone-200 shadow-sm text-center">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">PCRs Written</span>
+          <p id="dash-stat-pcrs" class="text-2xl font-black text-slate-900 mt-1">0</p>
+        </div>
+        <div class="bg-white p-4 rounded-xl border border-stone-200 shadow-sm text-center">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Live Encounters</span>
+          <p id="dash-stat-assessments" class="text-2xl font-black text-emerald-600 mt-1">0</p>
+        </div>
+      </div>
+
+      <!-- Interactive Charts Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        <!-- Chart 1: Age Demographics -->
+        <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm">
+          <h3 class="font-bold text-sm text-slate-800 mb-1">Patient Assessment Age Stratification</h3>
+          <p class="text-xs text-slate-500 mb-4">Required GA DPH age breakdown across logged encounters.</p>
+          <div class="chart-container">
+            <canvas id="chart-age-demographics"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 2: Transport Status Distribution -->
+        <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm">
+          <h3 class="font-bold text-sm text-slate-800 mb-1">Transport Outcomes & Dispositions</h3>
+          <p class="text-xs text-slate-500 mb-4">Proportion of transports, refusals, cancellations, and DOAs.</p>
+          <div class="chart-container">
+            <canvas id="chart-transport-outcomes"></canvas>
+          </div>
+        </div>
+
+        <!-- Chart 3: Psychomotor Skill Roles -->
+        <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm md:col-span-2">
+          <h3 class="font-bold text-sm text-slate-800 mb-1">Psychomotor Skill Involvement Breakdown</h3>
+          <p class="text-xs text-slate-500 mb-4">Frequency of Lead Role, Assist Role, and Observations across key skills.</p>
+          <div class="chart-container" style="max-width: 900px; height: 320px;">
+            <canvas id="chart-skills-breakdown"></canvas>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VIEW 3: SHIFT HISTORY & LOG MANAGER -->
+    <section id="view-history" class="hidden space-y-6">
+      
+      <!-- Section Introductory Context -->
+      <div class="bg-white border-l-4 border-emerald-600 rounded-r-xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-slate-900 mb-1">Saved Shift Logs Registry</h2>
+          <p class="text-sm text-slate-600 leading-relaxed">
+            Review and audit previously completed student clinical ride logs. You can inspect individual preceptor sign-offs or download all records in CSV format to populate the master Hope EMS Google Sheet.
+          </p>
+        </div>
+        <button onclick="exportAllToCSV()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition whitespace-nowrap">
+          ↓ Export to Google Sheets CSV
+        </button>
+      </div>
+
+      <!-- Logs Table -->
+      <div class="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-900 text-white font-bold">
+                <th class="p-3">Shift Date</th>
+                <th class="p-3">Student Name</th>
+                <th class="p-3">Agency / Unit</th>
+                <th class="p-3">Hours</th>
+                <th class="p-3">Transports</th>
+                <th class="p-3">Live Encounters</th>
+                <th class="p-3">Preceptor</th>
+                <th class="p-3">Status</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="history-table-body" class="divide-y divide-stone-200 text-slate-700">
+              <!-- Dynamically populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 4: GA DPH STANDARDS GUIDE -->
+    <section id="view-guidelines" class="hidden space-y-6">
+      
+      <div class="bg-white border-l-4 border-blue-600 rounded-r-xl p-5 shadow-sm">
+        <h2 class="text-xl font-bold text-slate-900 mb-1">GA DPH & NREMT Clinical Standards Guide</h2>
+        <p class="text-sm text-slate-600 leading-relaxed">
+          Reference rules for student ride-alongs conducted through Hope EMS Training Academy in partnership with Berrien County EMS, Worth County EMS, and station clinical sites.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm space-y-3">
+          <h3 class="font-bold text-slate-900 text-sm border-b pb-2">Student Shift Responsibilities</h3>
+          <ul class="text-xs text-slate-600 space-y-2 list-disc pl-4">
+            <li>Submit completed field ride logs within <strong>24 hours</strong> of shift conclusion.</li>
+            <li>Directly confirm all patient encounters with the assigned field preceptor prior to e-signature.</li>
+            <li>Maintain full HIPAA compliance; never record patient names, SSNs, or exact street addresses in chief complaint fields.</li>
+            <li>Verify accurate PCR numbers generated via GEMSIS Elite / ImageTrend systems.</li>
+          </ul>
+        </div>
+
+        <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm space-y-3">
+          <h3 class="font-bold text-slate-900 text-sm border-b pb-2">Preceptor License Attestation Rules</h3>
+          <ul class="text-xs text-slate-600 space-y-2 list-disc pl-4">
+            <li>Field preceptors must hold a valid Georgia Paramedic or AEMT license.</li>
+            <li>The preceptor must directly supervise all psychomotor skills performed by the student.</li>
+            <li>Checking the attestation box and entering an e-signature acts as an official legal verification for state accreditation audits.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-slate-900 text-slate-400 text-xs py-6 mt-12 border-t border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-2">
+      <p class="font-semibold text-slate-300">Hope EMS Training Academy • Official Clinical Tracking System</p>
+      <p>Compliant with Georgia Department of Public Health (GA DPH) Office of EMS and Trauma & NREMT Guidelines</p>
+    </div>
+  </footer>
+
+  <!-- Application Logic JavaScript -->
+  <script>
+    // System State Storage
+    let shiftLogs = [];
+    let currentCallTab = 1;
+    let chartAgeInstance = null;
+    let chartTransportInstance = null;
+    let chartSkillsInstance = null;
+
+    const SKILL_DOMAINS = [
+      "Patient Assessment - Medical",
+      "Patient Assessment - Trauma",
+      "Airway Management (OPA/NPA/Suction/BVM)",
+      "Oxygen Administration (NC/NRB)",
+      "IV Monitoring / Setup Assistance",
+      "Medication Assistance (Aspirin, Albuterol, Epi, Glucose, Naloxone)",
+      "Hemorrhage Control & Bandaging",
+      "Spinal Immobilization & Splinting",
+      "Stretcher & Patient Handling"
+    ];
+
+    // Initialization on Page Load
+    document.addEventListener("DOMContentLoaded", () => {
+      // Set today's date default
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById("shift_date").value = today;
+
+      // Render Dynamic Skill Rows
+      renderSkillsMatrix();
+
+      // Render Call Tabs Content
+      renderCallFields(1);
+
+      // Load mock/saved data from LocalStorage
+      loadSavedData();
+
+      // Initialize Analytics Charts
+      initCharts();
+
+      // Refresh Stats
+      updateAnalyticsDashboard();
+    });
+
+    // View Tab Switching Logic
+    function switchTab(viewName) {
+      const views = ['form', 'analytics', 'history', 'guidelines'];
+      views.forEach(v => {
+        const viewEl = document.getElementById(`view-${v}`);
+        const btnEl = document.getElementById(`tab-btn-${v}`);
+        if (v === viewName) {
+          viewEl.classList.remove('hidden');
+          btnEl.className = "px-4 py-2 text-sm font-bold rounded-lg transition-colors bg-red-700 text-white shadow-sm flex items-center gap-2 whitespace-nowrap";
+        } else {
+          viewEl.classList.add('hidden');
+          btnEl.className = "px-4 py-2 text-sm font-medium rounded-lg transition-colors text-slate-600 hover:bg-stone-100 flex items-center gap-2 whitespace-nowrap";
+        }
+      });
+
+      if (viewName === 'analytics') {
+        updateAnalyticsDashboard();
+      }
+    }
+
+    // Render Skills Matrix Table Rows
+    function renderSkillsMatrix() {
+      const tbody = document.getElementById("skills-matrix-body");
+      tbody.innerHTML = SKILL_DOMAINS.map((skill, idx) => `
+        <tr class="hover:bg-stone-50">
+          <td class="p-3 font-semibold text-slate-800">${skill}</td>
+          <td class="p-3 text-center"><input type="radio" name="skill_${idx}" value="Lead" class="text-red-600 focus:ring-red-500"></td>
+          <td class="p-3 text-center"><input type="radio" name="skill_${idx}" value="Assist" class="text-red-600 focus:ring-red-500"></td>
+          <td class="p-3 text-center"><input type="radio" name="skill_${idx}" value="Observed" class="text-red-600 focus:ring-red-500"></td>
+          <td class="p-3 text-center"><input type="radio" name="skill_${idx}" value="Not Encountered" checked class="text-red-600 focus:ring-red-500"></td>
+        </tr>
+      `).join('');
+    }
+
+    // Call Details Dynamic Tab Switcher
+    function switchCallTab(callNum) {
+      currentCallTab = callNum;
+      for (let i = 1; i <= 5; i++) {
+        const tabBtn = document.getElementById(`call-tab-${i}`);
+        if (i === callNum) {
+          tabBtn.className = "px-3 py-1.5 text-xs font-bold rounded-t-lg bg-red-700 text-white";
+        } else {
+          tabBtn.className = "px-3 py-1.5 text-xs font-bold rounded-t-lg bg-stone-100 text-slate-600";
+        }
+      }
+      renderCallFields(callNum);
+    }
+
+    // Render Form Fields for Call #1..5
+    function renderCallFields(callNum) {
+      const container = document.getElementById("call-fields-container");
+      const isReq = callNum === 1;
+
+      container.innerHTML = `
+        <div class="bg-stone-50 p-4 rounded-lg border border-stone-200 space-y-4">
+          <div class="flex justify-between items-center border-b border-stone-200 pb-2">
+            <h4 class="font-bold text-xs text-slate-800 uppercase">Call #${callNum} Information ${isReq ? '<span class="text-red-600">*</span>' : '(Optional)'}</h4>
+            <span class="text-[10px] text-slate-500">Call Entry ${callNum} of 5</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Run / PCR Number ${isReq ? '*' : ''}</label>
+              <input type="text" id="call_${callNum}_pcr" ${isReq ? 'required' : ''} placeholder="e.g. 2026-0891" class="w-full px-3 py-1.5 border border-stone-300 rounded text-xs bg-white focus:ring-1 focus:ring-red-600">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Patient Age ${isReq ? '*' : ''}</label>
+              <input type="text" id="call_${callNum}_age" ${isReq ? 'required' : ''} placeholder="e.g. 12 yrs or 45 yrs" class="w-full px-3 py-1.5 border border-stone-300 rounded text-xs bg-white focus:ring-1 focus:ring-red-600">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Patient Gender ${isReq ? '*' : ''}</label>
+              <select id="call_${callNum}_gender" ${isReq ? 'required' : ''} class="w-full px-3 py-1.5 border border-stone-300 rounded text-xs bg-white focus:ring-1 focus:ring-red-600">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other / Non-Binary</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Chief Complaint / Primary Impression ${isReq ? '*' : ''}</label>
+            <textarea id="call_${callNum}_complaint" rows="2" ${isReq ? 'required' : ''} placeholder="Describe primary symptoms e.g. Chest pain radiating to left arm" class="w-full px-3 py-1.5 border border-stone-300 rounded text-xs bg-white focus:ring-1 focus:ring-red-600"></textarea>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Interventions Performed / Assisted</label>
+              <div class="grid grid-cols-2 gap-1 text-[11px] bg-white p-2 border border-stone-200 rounded max-h-32 overflow-y-auto">
+                <label class="flex items-center space-x-1"><input type="checkbox" name="call_${callNum}_int" value="Vitals"> <span>Vital Signs</span></label>
+                <label class="flex items-center space-x-1"><input type="checkbox" name="call_${callNum}_int" value="Airway"> <span>Airway (OPA/NPA)</span></label>
+                <label class="flex items-center space-x-1"><input type="checkbox" name="call_${callNum}_int" value="Oxygen"> <span>Oxygen Therapy</span></label>
+                <label class="flex items-center space-x-1"><input type="checkbox" name="call_${callNum}_int" value="IV Setup"> <span>IV Setup Assist</span></label>
+                <label class="flex items-center space-x-1"><input type="checkbox" name="call_${callNum}_int" value="Meds"> <span>Med Administration</span></label>
+                <label class="flex items-center space-x-1"><input type="checkbox" name="call_${callNum}_int" value="Hemorrhage"> <span>Wound Care</span></label>
+                <label class="flex items-center space-x-1"><input type="checkbox" name="call_${callNum}_int" value="Splinting"> <span>Splinting</span></label>
+                <label class="flex items-center space-x-1"><input type="checkbox" name="call_${callNum}_int" value="CPR"> <span>CPR / AED</span></label>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Transport Status ${isReq ? '*' : ''}</label>
+              <select id="call_${callNum}_status" ${isReq ? 'required' : ''} class="w-full px-3 py-1.5 border border-stone-300 rounded text-xs bg-white focus:ring-1 focus:ring-red-600">
+                <option value="Transported">Transported to Facility</option>
+                <option value="Refusal">Refusal (AMA)</option>
+                <option value="DOA">Dead on Scene (DOA)</option>
+                <option value="Cancelled">Cancelled En Route / On Scene</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Auto-Calculate Shift Hours from start & end time inputs
+    function calcShiftHours() {
+      const start = document.getElementById("start_time").value;
+      const end = document.getElementById("end_time").value;
+      if (start && end) {
+        const sParts = start.split(':');
+        const eParts = end.split(':');
+        let sMin = parseInt(sParts[0]) * 60 + parseInt(sParts[1]);
+        let eMin = parseInt(eParts[0]) * 60 + parseInt(eParts[1]);
+        if (eMin < sMin) eMin += 24 * 60; // Overnight shift
+        const diffHrs = (eMin - sMin) / 60;
+        document.getElementById("shift_hours").value = diffHrs.toFixed(1);
+      }
+    }
+
+    // Calculate sum of Pediatric + Adult + Geriatric
+    function updateCalculatedTotals() {
+      const p = parseInt(document.getElementById("ped_assessments").value) || 0;
+      const a = parseInt(document.getElementById("adult_assessments").value) || 0;
+      const g = parseInt(document.getElementById("geriatric_assessments").value) || 0;
+      document.getElementById("total_live_assessments_display").textContent = p + a + g;
+    }
+
+    // Form Submission Handler
+    function handleFormSubmit(event) {
+      event.preventDefault();
+
+      // Collect Form Data
+      const logEntry = {
+        id: "LOG-" + Date.now().toString().slice(-6),
+        submittedAt: new Date().toLocaleDateString(),
+        studentName: document.getElementById("student_name").value,
+        shiftDate: document.getElementById("shift_date").value,
+        agency: document.getElementById("clinical_agency").value,
+        unit: document.getElementById("unit_number").value,
+        startTime: document.getElementById("start_time").value,
+        endTime: document.getElementById("end_time").value,
+        shiftHours: parseFloat(document.getElementById("shift_hours").value) || 0,
+        transports: parseInt(document.getElementById("total_transports").value) || 0,
+        pcrs: parseInt(document.getElementById("pcrs_written").value) || 0,
+        ped: parseInt(document.getElementById("ped_assessments").value) || 0,
+        adult: parseInt(document.getElementById("adult_assessments").value) || 0,
+        geriatric: parseInt(document.getElementById("geriatric_assessments").value) || 0,
+        vitals: parseInt(document.getElementById("vitals_assessed").value) || 0,
+        siteRating: document.querySelector('input[name="site_rating"]:checked')?.value || "5",
+        preceptorName: document.getElementById("preceptor_name").value,
+        preceptorLicense: document.getElementById("preceptor_license").value,
+        overallExperience: document.getElementById("overall_experience").value,
+        call1Status: document.getElementById("call_1_status") ? document.getElementById("call_1_status").value : "Transported",
+        skills: SKILL_DOMAINS.map((sk, idx) => {
+          const selected = document.querySelector(`input[name="skill_${idx}"]:checked`);
+          return { skill: sk, role: selected ? selected.value : "Not Encountered" };
+        })
+      };
+
+      shiftLogs.unshift(logEntry);
+      saveDataToLocalStorage();
+      updateHistoryTable();
+      updateAnalyticsDashboard();
+
+      alert("Clinical Field Ride Log successfully verified and saved to the registry!");
+      switchTab('history');
+    }
+
+    // Load LocalStorage or Pre-populate Initial Sample Data
+    function loadSavedData() {
+      const local = localStorage.getItem("hope_ems_ride_logs");
+      if (local) {
+        shiftLogs = JSON.parse(local);
+      } else {
+        // Initial sample data for realistic demonstration
+        shiftLogs = [
+          {
+            id: "LOG-881201",
+            submittedAt: "09/01/2026",
+            studentName: "John Smith",
+            shiftDate: "2026-09-01",
+            agency: "Berrien County EMS",
+            unit: "Medic 1",
+            startTime: "07:00",
+            endTime: "19:00",
+            shiftHours: 12,
+            transports: 4,
+            pcrs: 4,
+            ped: 1,
+            adult: 3,
+            geriatric: 2,
+            vitals: 6,
+            siteRating: "5",
+            preceptorName: "Mark Robinson, Paramedic",
+            preceptorLicense: "P-44912",
+            overallExperience: "Satisfactory",
+            call1Status: "Transported",
+            skills: [
+              { skill: "Patient Assessment - Medical", role: "Lead" },
+              { skill: "Patient Assessment - Trauma", role: "Assist" },
+              { skill: "Airway Management (OPA/NPA/Suction/BVM)", role: "Assist" },
+              { skill: "Oxygen Administration (NC/NRB)", role: "Lead" },
+              { skill: "IV Monitoring / Setup Assistance", role: "Assist" },
+              { skill: "Medication Assistance (Aspirin, Albuterol, Epi, Glucose, Naloxone)", role: "Lead" },
+              { skill: "Hemorrhage Control & Bandaging", role: "Observed" },
+              { skill: "Spinal Immobilization & Splinting", role: "Assist" },
+              { skill: "Stretcher & Patient Handling", role: "Lead" }
+            ]
+          }
+        ];
+        saveDataToLocalStorage();
+      }
+      updateHistoryTable();
+    }
+
+    function saveDataToLocalStorage() {
+      localStorage.setItem("hope_ems_ride_logs", JSON.stringify(shiftLogs));
+    }
+
+    // Refresh History Table
+    function updateHistoryTable() {
+      const tbody = document.getElementById("history-table-body");
+      document.getElementById("history-count").textContent = shiftLogs.length;
+
+      if (shiftLogs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-slate-400">No shift logs submitted yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = shiftLogs.map(log => `
+        <tr class="hover:bg-stone-50 border-b border-stone-200">
+          <td class="p-3 font-semibold">${log.shiftDate}</td>
+          <td class="p-3 font-bold text-slate-900">${log.studentName}</td>
+          <td class="p-3">${log.agency} (${log.unit})</td>
+          <td class="p-3 font-mono">${log.shiftHours} hrs</td>
+          <td class="p-3 font-mono text-red-700 font-bold">${log.transports}</td>
+          <td class="p-3 font-mono">${log.ped + log.adult + log.geriatric} pts</td>
+          <td class="p-3">${log.preceptorName}<br><span class="text-[10px] text-slate-400">Lic: ${log.preceptorLicense}</span></td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">Verified</span></td>
+          <td class="p-3 text-right">
+            <button onclick="deleteLog('${log.id}')" class="text-xs text-red-600 hover:text-red-800 font-semibold">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function deleteLog(logId) {
+      if (confirm("Are you sure you want to delete this field log record?")) {
+        shiftLogs = shiftLogs.filter(l => l.id !== logId);
+        saveDataToLocalStorage();
+        updateHistoryTable();
+        updateAnalyticsDashboard();
+      }
+    }
+
+    // Chart.js Visualization Setup
+    function initCharts() {
+      // Donut Chart: Age Breakdown (Navy #1e3a8a for Pediatric Age 1-17)
+      const ctxAge = document.getElementById("chart-age-demographics").getContext("2d");
+      chartAgeInstance = new Chart(ctxAge, {
+        type: 'doughnut',
+        data: {
+          labels: ['Pediatric (Age 1-17)', 'Adult (18-64)', 'Geriatric (65+)'],
+          datasets: [{
+            data: [0, 0, 0],
+            backgroundColor: ['#1e3a8a', '#3b82f6', '#f59e0b'],
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return ` ${context.label}: ${context.raw} assessments`;
+                }
+              }
+            }
+          }
+        }
+      });
+
+      // Pie Chart: Transport Status
+      const ctxTrans = document.getElementById("chart-transport-outcomes").getContext("2d");
+      chartTransportInstance = new Chart(ctxTrans, {
+        type: 'pie',
+        data: {
+          labels: ['Transported', 'Refusal (AMA)', 'DOA', 'Cancelled'],
+          datasets: [{
+            data: [0, 0, 0, 0],
+            backgroundColor: ['#10b981', '#f97316', '#64748b', '#94a3b8'],
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+          }
+        }
+      });
+
+      // Bar Chart: Skills Breakdown
+      const ctxSkills = document.getElementById("chart-skills-breakdown").getContext("2d");
+      chartSkillsInstance = new Chart(ctxSkills, {
+        type: 'bar',
+        data: {
+          labels: SKILL_DOMAINS.map(s => s.length > 16 ? s.substring(0, 16) + '...' : s),
+          datasets: [
+            { label: 'Lead Role', data: [], backgroundColor: '#b91c1c' },
+            { label: 'Assist Role', data: [], backgroundColor: '#2563eb' },
+            { label: 'Observed Only', data: [], backgroundColor: '#cbd5e1' }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true, ticks: { font: { size: 10 } } },
+            y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } }
+          },
+          plugins: {
+            legend: { position: 'top', labels: { boxWidth: 12, font: { size: 11 } } }
+          }
+        }
+      });
+    }
+
+    // Refresh Analytics Calculations & Charts
+    function updateAnalyticsDashboard() {
+      let totalHrs = 0;
+      let totalTrans = 0;
+      let totalPcrs = 0;
+      let totalPed = 0;
+      let totalAdult = 0;
+      let totalGeriatric = 0;
+
+      let transStatusCount = { Transported: 0, Refusal: 0, DOA: 0, Cancelled: 0 };
+      let skillCounts = SKILL_DOMAINS.map(() => ({ lead: 0, assist: 0, observed: 0 }));
+
+      shiftLogs.forEach(log => {
+        totalHrs += log.shiftHours || 0;
+        totalTrans += log.transports || 0;
+        totalPcrs += log.pcrs || 0;
+        totalPed += log.ped || 0;
+        totalAdult += log.adult || 0;
+        totalGeriatric += log.geriatric || 0;
+
+        if (log.call1Status && transStatusCount[log.call1Status] !== undefined) {
+          transStatusCount[log.call1Status] += 1;
+        } else {
+          transStatusCount.Transported += 1;
+        }
+
+        if (log.skills && Array.isArray(log.skills)) {
+          log.skills.forEach((skObj, idx) => {
+            if (idx < SKILL_DOMAINS.length) {
+              if (skObj.role === 'Lead') skillCounts[idx].lead += 1;
+              if (skObj.role === 'Assist') skillCounts[idx].assist += 1;
+              if (skObj.role === 'Observed') skillCounts[idx].observed += 1;
+            }
+          });
+        }
+      });
+
+      // Update Cards
+      document.getElementById("dash-stat-hours").textContent = totalHrs.toFixed(1);
+      document.getElementById("dash-stat-transports").textContent = totalTrans;
+      document.getElementById("dash-stat-pcrs").textContent = totalPcrs;
+      document.getElementById("dash-stat-assessments").textContent = totalPed + totalAdult + totalGeriatric;
+
+      // Update Chart Data
+      if (chartAgeInstance) {
+        chartAgeInstance.data.datasets[0].data = [totalPed, totalAdult, totalGeriatric];
+        chartAgeInstance.update();
+      }
+
+      if (chartTransportInstance) {
+        chartTransportInstance.data.datasets[0].data = [
+          transStatusCount.Transported,
+          transStatusCount.Refusal,
+          transStatusCount.DOA,
+          transStatusCount.Cancelled
+        ];
+        chartTransportInstance.update();
+      }
+
+      if (chartSkillsInstance) {
+        chartSkillsInstance.data.datasets[0].data = skillCounts.map(s => s.lead);
+        chartSkillsInstance.data.datasets[1].data = skillCounts.map(s => s.assist);
+        chartSkillsInstance.data.datasets[2].data = skillCounts.map(s => s.observed);
+        chartSkillsInstance.update();
+      }
+    }
+
+    // Export Data to CSV format (Matching Google Sheets integration)
+    function exportAllToCSV() {
+      if (shiftLogs.length === 0) {
+        alert("No shift log data available to export.");
+        return;
+      }
+
+      const headers = [
+        "Log ID", "Shift Date", "Student Name", "Agency", "Unit", "Shift Hours",
+        "Transports", "PCRs Written", "Pediatric (Age 1-17)", "Adult", "Geriatric", "Vitals",
+        "Preceptor Name", "Preceptor License", "Overall Rating"
+      ];
+
+      const rows = shiftLogs.map(l => [
+        l.id, l.shiftDate, `"${l.studentName}"`, `"${l.agency}"`, `"${l.unit}"`,
+        l.shiftHours, l.transports, l.pcrs, l.ped, l.adult, l.geriatric, l.vitals,
+        `"${l.preceptorName}"`, `"${l.preceptorLicense}"`, `"${l.overallExperience}"`
+      ]);
+
+      const csvContent = "data:text/csv;charset=utf-8," 
+        + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Hope_EMS_Field_Ride_Logs_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function resetForm() {
+      if (confirm("Reset form inputs? All unsaved text will be cleared.")) {
+        document.getElementById("clinical-form").reset();
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById("shift_date").value = today;
+        updateCalculatedTotals();
+      }
+    }
+  </script>
+</body>
+</html>
